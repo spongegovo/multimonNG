@@ -1,0 +1,127 @@
+#!/usr/bin/python2
+
+import threading
+import subprocess
+import re
+import json
+import threading
+from time import sleep
+import sys
+import logging
+import logging.handlers
+import argparse
+import signal
+import time
+from SerLCD import SerLCD
+
+parser = argparse.ArgumentParser(description='PyMultimon LCD Display.')
+parser.add_argument('--syslog', action='store_true', help='Log to syslog')
+parser.add_argument('--logfile', dest='logfile', help='Log to file')
+parser.add_argument('-v', '--verbose', action='store_true', help='Log all traffic - including beacon')
+args = parser.parse_args()
+
+logger = logging.getLogger('pymultimon')
+loglevel = logging.DEBUG if args.verbose else logging.INFO
+logger.setLevel(loglevel)
+if args.syslog:
+	loghandler = logging.handlers.SysLogHandler(address = '/dev/log')
+	formater = logging.Formatter('pymultimon: %(message)s')
+	loghandler.setFormatter(formater)
+elif args.logfile:
+	loghandler = logging.FileHandler(args.logfile)
+	formatter = logging.Formatter('[%(asctime)s] %(levelname)+8s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+	loghandler.setFormatter(formatter)
+else:
+	loghandler = logging.StreamHandler(sys.stdout)
+	formatter = logging.Formatter('[%(asctime)s] %(levelname)+8s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+        loghandler.setFormatter(formatter)
+
+logger.addHandler(loghandler)
+
+display = SerLCD("/dev/ttyAMA0","9600")
+
+def is_json(myjson):
+  try:
+    json_object = json.loads(myjson)
+  except ValueError, e:
+    return False
+  return True
+
+class Multimon:
+  def __init__(self):
+    self.subprocs = {}
+    self._start()
+    self._running = True
+    self._worker = threading.Thread(target=self._mm_worker)
+    self._worker.setDaemon(True)
+    self._worker.start()
+    self.lastpagetime = time.time()
+
+  def exit(self):
+    self._running = False
+    self._stop()
+
+  def _start(self):
+    proc_src = subprocess.Popen(
+      ['rtl_fm', '-f', '148.9125M', '-s', '22050',
+      '-g', '100',
+      '-d', '0', '-'],
+      stdout=subprocess.PIPE, stderr=open('/dev/null')
+    )
+
+    proc_mm = subprocess.Popen(
+      ['multimon-ng', '-a', 'POCSAG512', '-b', '1', '-M', '-t', 'raw', '-f', 'alpha', '-v', '3', '-'],
+      stdin=proc_src.stdout,
+      stdout=subprocess.PIPE, stderr=open('/dev/null')
+    )
+    self.subprocs['src'] = proc_src
+    self.subprocs['mm'] = proc_mm
+
+  def _stop(self):
+    for name in ['mm', 'src']:
+      try:
+        proc = self.subprocs[name]
+        proc.terminate()
+      except:
+        pass
+
+  def _mm_worker(self):
+    while self._running:
+      line = self.subprocs['mm'].stdout.readline()
+      line = line.strip()
+      logger.info(line)
+      if (is_json(line)):
+        self.lastpagetime = time.time()
+        message = json.loads(line)
+        line1 = "Page: %s" % message['address']
+        display.pos(1,1)
+        display.write(line1.encode('ascii','ignore'))
+
+display.clear()
+display.pos(1,1)
+display.write("Multimon-ng     ".encode('ascii','ignore'))
+logger.info("Starting Multimon")
+mm = Multimon()
+
+def signal_handler(signal, frame):
+	logger.info("Stopping Multimon")
+	mm.exit()
+	sys.exit(0)
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+while True:
+  res = mm.subprocs['mm'].poll()
+  if res is not None:
+    logger.info("Multimon-ng was killed, restarting")
+    mm.exit()
+    mm = Multimon()
+
+  display.pos(2,1)
+  elapsed = time.time() - mm.lastpagetime
+  line1 = "Recv %usec ago" % elapsed
+  display.write(line1.encode('ascii','ignore'))
+  if elapsed > 60:
+    display.pos(1,1)
+    display.write("Multimon-ng     ".encode('ascii','ignore'))
+  sleep(1)

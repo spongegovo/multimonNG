@@ -1,0 +1,9 @@
+[Unit]
+Description=PyMultimon
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/pymultimon --syslog
+
+[Install]
+WantedBy=multi-user.target
