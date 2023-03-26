@@ -334,6 +334,14 @@ extern const struct demod_param demod_scope;
 
 /* ---------------------------------------------------------------------- */
 
+#ifdef MQTT
+extern int mqtt_init (void);
+extern void mqtt_shutdown (void);
+extern void mqtt_publish_msg (int address, char *message);
+extern bool start_mqtt;
+#endif
+
+
 void _verbprintf(int verb_level, const char *fmt, ...);
 #if !defined(MAX_VERBOSE_LEVEL)
 #   define MAX_VERBOSE_LEVEL 0

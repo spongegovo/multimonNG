@@ -84,7 +84,8 @@ DEFINES += PULSE_AUDIO
 DEFINES += CHARSET_UTF8
 LIBS += -L/usr/local/lib -lX11 -lpulse-simple -lpulse
 SOURCES +=  xdisplay.c \
-            demod_display.c
+            demod_display.c \
+            mqttclient.c
 }
 
 unix:linux-g++-32:!symbian:!macx{
@@ -93,7 +94,8 @@ DEFINES += PULSE_AUDIO
 DEFINES += CHARSET_UTF8
 LIBS += -lX11 -lpulse-simple -lpulse
 SOURCES +=  xdisplay.c \
-            demod_display.c
+            demod_display.c \
+            mqttclient.c
 }
 
 unix:linux-g++-64:!symbian:!macx{
@@ -102,13 +104,16 @@ DEFINES += PULSE_AUDIO
 DEFINES += CHARSET_UTF8
 LIBS += -lX11 -lpulse-simple -lpulse
 SOURCES +=  xdisplay.c \
-            demod_display.c
+            demod_display.c \
+            mqttclient.c
 }
 
 unix:linux-g++:!symbian:!macx{
 DEFINES += PULSE_AUDIO
 DEFINES += CHARSET_UTF8
-LIBS += -lX11 -lpulse-simple -lpulse
+DEFINES += MQTT
+LIBS += -lX11 -lpulse-simple -lpulse -lpaho-mqtt3a
 SOURCES +=  xdisplay.c \
-            demod_display.c
+            demod_display.c \
+            mqttclient.c
 }

@@ -105,6 +105,10 @@ extern int cw_threshold;
 extern bool cw_disable_auto_threshold;
 extern bool cw_disable_auto_timing;
 
+#ifdef MQTT
+bool start_mqtt = false;
+#endif
+
 void quit(void);
 
 /* ---------------------------------------------------------------------- */
@@ -552,6 +556,9 @@ void quit(void)
             if (dem[i]->deinit)
                 dem[i]->deinit(dem_st+i);
     }
+    #ifdef MQTT
+    mqtt_shutdown ();
+    #endif
 }
 
 /* ---------------------------------------------------------------------- */
@@ -585,6 +592,9 @@ static const char usage_str[] = "\n"
         "  -g         : CW: Gap length in ms (default: 50)\n"
         "  -x         : CW: Disable auto threshold detection\n"
         "  -y         : CW: Disable auto timing detection\n"
+#ifdef MQTT
+        "  -M         : Start MQTT client\n"
+#endif
         "  --timestamp: Add a time stamp in front of every printed line\n"
         "  --label    : Add a label to the front of every printed line\n"
         "   Raw input requires one channel, 16 bit, signed integer (platform-native)\n"
@@ -610,7 +620,7 @@ int main(int argc, char *argv[])
         {0, 0, 0, 0}
       };
 
-    while ((c = getopt_long(argc, argv, "t:a:s:v:b:f:g:d:o:cqhAmrxynipeu", long_options, NULL)) != EOF) {
+    while ((c = getopt_long(argc, argv, "t:a:s:v:b:f:g:d:o:McqhAmrxynipeu", long_options, NULL)) != EOF) {
         switch (c) {
         case 'h':
         case '?':
@@ -745,6 +755,13 @@ intypefound:
             if(i) cw_dit_length = abs(i);
             break;
         }
+#ifdef MQTT
+        case 'M':
+        {
+            start_mqtt = true;
+            break;
+        }
+#endif
             
         case 'g':
         {
@@ -840,6 +857,10 @@ intypefound:
         exit(4);
     }
     
+#ifdef MQTT
+    if (start_mqtt)
+        mqtt_init ();
+#endif
     for (i = optind; i < argc; i++)
         input_file(sample_rate, overlap, argv[i], input_type);
     

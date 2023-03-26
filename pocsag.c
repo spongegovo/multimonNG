@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <time.h>
 
 /* ---------------------------------------------------------------------- */
 
@@ -164,25 +165,25 @@ static char *translate_alpha(unsigned char chr)
                  { 30, "<RS>" },
                  { 31, "<US>" },
              #ifdef CHARSET_LATIN1
-                 { 0x5b, "\304" }, /* upper case A dieresis */
+                 /*{ 0x5b, "\304" },  upper case A dieresis */
                  { 0x5c, "\326" }, /* upper case O dieresis */
-                 { 0x5d, "\334" }, /* upper case U dieresis */
+                 /*{ 0x5d, "\334" },  upper case U dieresis */
                  { 0x7b, "\344" }, /* lower case a dieresis */
                  { 0x7c, "\366" }, /* lower case o dieresis */
                  { 0x7d, "\374" }, /* lower case u dieresis */
                  { 0x7e, "\337" }, /* sharp s */
              #elif defined CHARSET_UTF8
-                 { 0x5b, "Ä" }, /* upper case A dieresis */
+                 /*{ 0x5b, "Ä" }, upper case A dieresis */
                  { 0x5c, "Ö" }, /* upper case O dieresis */
-                 { 0x5d, "Ü" }, /* upper case U dieresis */
+                 /*{ 0x5d, "Ü" }, upper case U dieresis */
                  { 0x7b, "ä" }, /* lower case a dieresis */
                  { 0x7c, "ö" }, /* lower case o dieresis */
                  { 0x7d, "ü" }, /* lower case u dieresis */
                  { 0x7e, "ß" }, /* sharp s */
              #else
-                 { 0x5b, "AE" }, /* upper case A dieresis */
+                /* { 0x5b, "AE" }, upper case A dieresis */
                  { 0x5c, "OE" }, /* upper case O dieresis */
-                 { 0x5d, "UE" }, /* upper case U dieresis */
+                 /*{ 0x5d, "UE" }, upper case U dieresis */
                  { 0x7b, "ae" }, /* lower case a dieresis */
                  { 0x7c, "oe" }, /* lower case o dieresis */
                  { 0x7d, "ue" }, /* lower case u dieresis */
@@ -191,7 +192,7 @@ static char *translate_alpha(unsigned char chr)
                  { 127, "<DEL>" }};
 
     int min = 0, max = (sizeof(trtab) / sizeof(trtab[0])) - 1;
-
+    
     /*
      * binary search, list must be ordered!
      */
@@ -401,10 +402,17 @@ static void pocsag_printmessage(struct demod_state *s, bool sync)
             int guess_alpha = 0;
             int guess_skyper = 0;
             int unsure = 0;
+            char time_buf[20];
+            time_t t;
+            struct tm* tm_info;
 
             guess_num = print_msg_numeric(&s->l2.pocsag, num_string, sizeof(num_string));
             guess_alpha = print_msg_alpha(&s->l2.pocsag, alpha_string, sizeof(alpha_string));
             guess_skyper = print_msg_skyper(&s->l2.pocsag, skyper_string, sizeof(skyper_string));
+
+            t = time(NULL);
+            tm_info = localtime(&t);
+            strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", tm_info);
 
             if(guess_num < 20 && guess_alpha < 20 && guess_skyper < 20)
             {
@@ -431,15 +439,20 @@ static void pocsag_printmessage(struct demod_state *s, bool sync)
             if((pocsag_mode == POCSAG_MODE_ALPHA) || ((pocsag_mode == POCSAG_MODE_AUTO) && (guess_alpha >= 20 || unsure)))
             {
                 if((s->l2.pocsag.address != -2) || (s->l2.pocsag.function != -2))
-                    verbprintf(0, "%s: Address: %7lu  Function: %1hhi  ",s->dem_par->name,
+                    verbprintf(0, "{\"mode\":\"%s\",\"address\":\"%u\",\"function\":\"%1hhi\",",s->dem_par->name,
                            s->l2.pocsag.address, s->l2.pocsag.function);
                 else
-                    verbprintf(0, "%s: Address:       -  Function: -  ",s->dem_par->name);
+                    verbprintf(0, "{\"mode\":\"%s\", \"address\":\"\",\"function\":\"\"",s->dem_par->name);
+                verbprintf(0, "\"timestamp\":\"%s\",", time_buf);
                 if(pocsag_mode == POCSAG_MODE_AUTO)
-                    verbprintf(3, "Certainty: %5i  ", guess_alpha);
-                verbprintf(0, "Alpha:   %s", alpha_string);
+                    verbprintf(3, "\"certainty\":\"%5i\"", guess_alpha);
+                verbprintf(0, "\"alpha\":\"%s\"}", alpha_string);
                 if(!sync) verbprintf(2,"<LOST SYNC>");
                 verbprintf(0,"\n");
+#ifdef MQTT
+                if (start_mqtt)
+                    mqtt_publish_msg(s->l2.pocsag.address, alpha_string);
+#endif
             }
 
             if((pocsag_mode == POCSAG_MODE_SKYPER) || ((pocsag_mode == POCSAG_MODE_AUTO) && (guess_skyper >= 20 || unsure)))
